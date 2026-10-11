@@ -41,8 +41,30 @@ function serveAssetsPlugin() {
   };
 }
 
+// Build plugin to copy assets to dist/assets so all frames, models, and images exist in production
+function copyAssetsPlugin() {
+  return {
+    name: 'copy-assets-to-dist',
+    closeBundle() {
+      const srcDir = path.resolve(__dirname, 'assets');
+      const destDir = path.resolve(__dirname, 'dist/assets');
+      if (fs.existsSync(srcDir)) {
+        console.log('[build] Copying static assets to dist/assets...');
+        fs.cpSync(srcDir, destDir, {
+          recursive: true,
+          filter: (src) => {
+            const ext = path.extname(src).toLowerCase();
+            return ext !== '.mp4' && ext !== '.zip'; // Skip unused raw mp4 and zip files to save bandwidth & build size
+          },
+        });
+        console.log('[build] Static assets copied successfully!');
+      }
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), serveAssetsPlugin()],
+  plugins: [react(), serveAssetsPlugin(), copyAssetsPlugin()],
   server: {
     port: 3000,
     open: false,
