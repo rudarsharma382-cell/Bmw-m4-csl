@@ -15,6 +15,8 @@ function serveAssetsPlugin() {
     '.glb': 'model/gltf-binary',
     '.gltf': 'model/gltf+json',
     '.json': 'application/json',
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
   };
 
   return {
