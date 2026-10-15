@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { TelemetryHUD } from './TelemetryHUD';
+import { frameCache } from '../utils/frameCache';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -126,68 +127,32 @@ export const CanvasScroller = ({
     [getBestFrame]
   );
 
-  // Load images in controlled batches to prevent saturating HTTP sockets and Vercel edge limits
+  // Connect directly to the shared frameCache populated by the Preloader
   useEffect(() => {
-    imagesRef.current = new Array(frameCount);
-    let loadedCount = 0;
-    let isCancelled = false;
-
-    // Load initial 30 frames immediately for instant scrub response
-    const initialBatch = Math.min(30, frameCount);
-    for (let i = 0; i < initialBatch; i++) {
-      const img = new Image();
-      img.src = getFrameUrl(i + 1);
-      img.onload = () => {
-        if (isCancelled) return;
-        imagesRef.current[i] = img;
-        loadedCount++;
-        setLoadedPercent(Math.round((loadedCount / frameCount) * 100));
-
-        // Draw initial frame as soon as ANY frame is available
-        if (lastDrawnFrameRef.current === -1) {
-          renderFrame(0);
-        }
-      };
-      img.onerror = () => {
-        if (isCancelled) return;
-        loadedCount++;
-      };
+    if (!frameCache[folder]) {
+      frameCache[folder] = new Array(frameCount);
     }
+    imagesRef.current = frameCache[folder];
 
-    // Load remaining frames progressively
-    let nextIndex = initialBatch;
-    const loadNextChunk = () => {
-      if (isCancelled || nextIndex >= frameCount) return;
-      const chunkSize = 20;
-      const end = Math.min(nextIndex + chunkSize, frameCount);
-
-      for (let i = nextIndex; i < end; i++) {
-        const img = new Image();
-        img.src = getFrameUrl(i + 1);
-        img.onload = () => {
-          if (isCancelled) return;
-          imagesRef.current[i] = img;
-          loadedCount++;
-          setLoadedPercent(Math.round((loadedCount / frameCount) * 100));
-        };
-        img.onerror = () => {
-          if (isCancelled) return;
-          loadedCount++;
-        };
+    // Compute live loaded percentage directly from shared frame buffer
+    const updateProgress = () => {
+      const frames = frameCache[folder] || [];
+      let count = 0;
+      for (let i = 0; i < frameCount; i++) {
+        if (frames[i]?.complete && frames[i]?.naturalWidth > 0) {
+          count++;
+        }
       }
-      nextIndex = end;
-      if (nextIndex < frameCount) {
-        setTimeout(loadNextChunk, 80);
+      setLoadedPercent(Math.round((count / frameCount) * 100));
+      if (lastDrawnFrameRef.current === -1 && count > 0) {
+        renderFrame(0);
       }
     };
 
-    const timer = setTimeout(loadNextChunk, 150);
-
-    return () => {
-      isCancelled = true;
-      clearTimeout(timer);
-    };
-  }, [frameCount, getFrameUrl, renderFrame]);
+    updateProgress();
+    const timer = setInterval(updateProgress, 200);
+    return () => clearInterval(timer);
+  }, [folder, frameCount, renderFrame]);
 
   // Re-paint initial frame immediately when isReady triggers
   useEffect(() => {

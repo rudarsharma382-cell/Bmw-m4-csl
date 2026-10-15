@@ -14,6 +14,7 @@ import { SpecSheet } from './components/SpecSheet';
 import { Footer } from './components/Footer';
 import { ScrollRail } from './components/ScrollRail';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { frameCache } from './utils/frameCache';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -47,55 +48,64 @@ export default function App() {
     };
   }, []);
 
-  // Preload initial frames across ALL 4 sequences so every video scrubs instantly
+  // Preload ALL frames across ALL 4 sequences so every video scrubs with 100% fidelity
   useEffect(() => {
     const sequences = [
-      { folder: 'frames_studio', count: 30 },
-      { folder: 'frames_doors', count: 20 },
-      { folder: 'frames_drone_sweep', count: 20 },
-      { folder: 'frames_drone_revolve', count: 20 },
+      { folder: 'frames_studio', count: 300 },
+      { folder: 'frames_doors', count: 299 },
+      { folder: 'frames_drone_sweep', count: 300 },
+      { folder: 'frames_drone_revolve', count: 300 },
     ];
 
-    let totalToLoad = sequences.reduce((sum, s) => sum + s.count, 0);
+    const totalToLoad = sequences.reduce((sum, s) => sum + s.count, 0); // 1,199 total frames
     let totalLoaded = 0;
     let isMounted = true;
 
-    // Safety fallback timer: Ensure site becomes ready within 4s even under network congestion
-    const safetyTimer = setTimeout(() => {
-      if (isMounted) {
-        setLoaderProgress(100);
-        setIsReady(true);
-        ScrollTrigger.refresh();
+    const onDone = () => {
+      if (!isMounted) return;
+      totalLoaded++;
+      const pct = Math.min(100, Math.round((totalLoaded / totalToLoad) * 100));
+      setLoaderProgress(pct);
+
+      if (totalLoaded >= totalToLoad) {
+        setTimeout(() => {
+          if (isMounted) {
+            setIsReady(true);
+            ScrollTrigger.refresh();
+          }
+        }, 500);
       }
-    }, 4000);
+    };
 
     sequences.forEach(({ folder, count }) => {
+      if (!frameCache[folder]) {
+        frameCache[folder] = new Array(count);
+      }
+
       for (let i = 1; i <= count; i++) {
         const img = new Image();
         img.src = `/assets/${folder}/frame_${String(i).padStart(4, '0')}.jpg`;
-        const onDone = () => {
-          if (!isMounted) return;
-          totalLoaded++;
-          const pct = Math.min(100, Math.round((totalLoaded / totalToLoad) * 100));
-          setLoaderProgress(pct);
-          if (totalLoaded >= totalToLoad) {
-            clearTimeout(safetyTimer);
-            setTimeout(() => {
-              if (isMounted) {
-                setIsReady(true);
-                ScrollTrigger.refresh();
-              }
-            }, 300);
-          }
+        img.onload = () => {
+          frameCache[folder][i - 1] = img;
+          onDone();
         };
-        img.onload = onDone;
-        img.onerror = onDone;
+        img.onerror = () => {
+          // Retry once on network drop
+          const retryImg = new Image();
+          retryImg.src = `/assets/${folder}/frame_${String(i).padStart(4, '0')}.jpg?r=1`;
+          retryImg.onload = () => {
+            frameCache[folder][i - 1] = retryImg;
+            onDone();
+          };
+          retryImg.onerror = () => {
+            onDone();
+          };
+        };
       }
     });
 
     return () => {
       isMounted = false;
-      clearTimeout(safetyTimer);
     };
   }, []);
 
