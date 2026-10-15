@@ -8,18 +8,10 @@ import {
   Html,
 } from '@react-three/drei';
 import * as THREE from 'three';
+import { ErrorBoundary } from './ErrorBoundary';
 
 // 3D Model Specifications
 const MODELS = [
-  {
-    id: 'widebody',
-    name: 'CSL WIDEBODY TRACK SPEC',
-    file: '/assets/bmw_m4_widebody__www.vecarz.com.glb',
-    tag: 'WIDEBODY GT / EXTENDED TRACK',
-    aero: 'Flared wheel arches, aggressive front canards, extended rear diffuser',
-    mass: '1,610 kg',
-    power: '550 hp',
-  },
   {
     id: 'csl',
     name: 'FACTORY M4 CSL HOMOLOGATION',
@@ -27,6 +19,15 @@ const MODELS = [
     tag: 'FACTORY SPEC / 1,000 UNITS',
     aero: 'Standard G82 CSL carbon aero pack, ducktail bootlid, laser yellow DRL',
     mass: '1,625 kg',
+    power: '550 hp',
+  },
+  {
+    id: 'widebody',
+    name: 'CSL WIDEBODY TRACK SPEC',
+    file: '/assets/bmw_m4_widebody__www.vecarz.com.glb',
+    tag: 'WIDEBODY GT / EXTENDED TRACK',
+    aero: 'Flared wheel arches, aggressive front canards, extended rear diffuser',
+    mass: '1,610 kg',
     power: '550 hp',
   },
   {
@@ -56,45 +57,49 @@ function NormalizedCar({ file, wireframe }) {
     const group = groupRef.current;
     if (!group) return;
 
-    // Reset transformations before measuring
-    group.position.set(0, 0, 0);
-    group.rotation.set(0, 0, 0);
-    group.scale.set(1, 1, 1);
-    group.updateMatrixWorld(true);
+    try {
+      // Reset transformations before measuring
+      group.position.set(0, 0, 0);
+      group.rotation.set(0, 0, 0);
+      group.scale.set(1, 1, 1);
+      group.updateMatrixWorld(true);
 
-    // Measure exact world bounding box
-    const box = new THREE.Box3().setFromObject(group);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
+      // Measure exact world bounding box
+      const box = new THREE.Box3().setFromObject(group);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
 
-    // Standardize every model to 4.7 units length
-    const maxDim = Math.max(size.x, size.y, size.z);
-    if (maxDim > 0) {
-      const targetScale = 4.7 / maxDim;
-      group.scale.setScalar(targetScale);
+      // Standardize every model to 4.7 units length
+      const maxDim = Math.max(size.x, size.y, size.z);
+      if (maxDim > 0) {
+        const targetScale = 4.7 / maxDim;
+        group.scale.setScalar(targetScale);
 
-      // Anchor model at X=0, Z=0, and tire base at Y=0
-      group.position.set(
-        -center.x * targetScale,
-        -box.min.y * targetScale,
-        -center.z * targetScale
-      );
-    }
-
-    // Configure materials
-    group.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-        if (child.material) {
-          child.material.wireframe = wireframe;
-          child.material.envMapIntensity = 1.3;
-          child.material.needsUpdate = true;
-        }
+        // Anchor model at X=0, Z=0, and tire base at Y=0
+        group.position.set(
+          -center.x * targetScale,
+          -box.min.y * targetScale,
+          -center.z * targetScale
+        );
       }
-    });
+
+      // Configure materials
+      group.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          if (child.material) {
+            child.material.wireframe = wireframe;
+            child.material.envMapIntensity = 1.3;
+            child.material.needsUpdate = true;
+          }
+        }
+      });
+    } catch (err) {
+      console.warn('NormalizedCar transform error:', err);
+    }
   }, [clonedScene, wireframe]);
 
   return (
@@ -380,63 +385,125 @@ export const Showroom3D = () => {
             overflow: 'hidden',
           }}
         >
-          <Canvas
-            shadows
-            camera={{ position: [5.2, 1.8, 6.2], fov: 32 }}
-            gl={{
-              antialias: true,
-              toneMapping: THREE.ACESFilmicToneMapping,
-              toneMappingExposure: 1.1,
-            }}
-            style={{ width: '100%', height: '100%', display: 'block' }}
+          <ErrorBoundary
+            name="SHOWROOM 3D LAB"
+            fallback={(error, retry) => (
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '32px',
+                  backgroundColor: 'var(--bg-raised)',
+                  gap: '16px',
+                }}
+              >
+                <span className="label-micro" style={{ color: 'var(--accent)' }}>
+                  CHAPTER 08 // 3D TURNTABLE PAUSED
+                </span>
+                <h3 className="font-display" style={{ color: 'var(--text)', fontSize: 'var(--text-h3)' }}>
+                  WEBGL CONTEXT AVAILABLE ON RE-ENGAGE
+                </h3>
+                <p style={{ color: 'var(--text-dim)', fontSize: 'var(--text-small)', maxWidth: '48ch', textAlign: 'center' }}>
+                  The 3D chassis inspector safely paused to conserve GPU memory. Click below to re-initialize the 3D viewport.
+                </p>
+                <button
+                  onClick={retry}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid var(--accent)',
+                    color: 'var(--accent)',
+                    padding: '10px 24px',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 'var(--text-label)',
+                    cursor: 'pointer',
+                    letterSpacing: '0.12em',
+                  }}
+                >
+                  INITIALIZE 3D LAB [↺]
+                </button>
+              </div>
+            )}
           >
-            {/* Automotive Studio Lighting */}
-            <ambientLight intensity={0.5} />
-            <directionalLight
-              position={[10, 15, 10]}
-              intensity={2.0}
-              castShadow
-              shadow-mapSize-width={2048}
-              shadow-mapSize-height={2048}
-              shadow-bias={-0.0001}
-            />
-            <directionalLight position={[-10, 10, -10]} intensity={1.2} color="#b0c4de" />
-            <directionalLight position={[0, -5, 5]} intensity={0.3} />
-
-            <Environment preset={envPreset} background={false} />
-
-            <Suspense fallback={<LoaderFallback />}>
-              {/* Normalized car: perfectly scaled and anchored at origin */}
-              <NormalizedCar
-                key={activeModel.id}
-                file={activeModel.file}
-                wireframe={wireframe}
+            <Canvas
+              shadows
+              camera={{ position: [5.2, 1.8, 6.2], fov: 32 }}
+              gl={{
+                antialias: true,
+                toneMapping: THREE.ACESFilmicToneMapping,
+                toneMappingExposure: 1.1,
+                powerPreference: 'high-performance',
+              }}
+              style={{ width: '100%', height: '100%', display: 'block' }}
+            >
+              {/* Automotive Studio Lighting */}
+              <ambientLight intensity={0.6} />
+              <directionalLight
+                position={[10, 15, 10]}
+                intensity={2.2}
+                castShadow
+                shadow-mapSize-width={2048}
+                shadow-mapSize-height={2048}
+                shadow-bias={-0.0001}
               />
+              <directionalLight position={[-10, 10, -10]} intensity={1.2} color="#b0c4de" />
+              <directionalLight position={[0, -5, 5]} intensity={0.3} />
 
-              {/* Floor Contact Shadows */}
-              <ContactShadows
-                position={[0, 0, 0]}
-                opacity={0.8}
-                scale={14}
-                blur={2.0}
-                far={4.5}
-                color="#000000"
+              <Suspense fallback={<LoaderFallback />}>
+                {/* Procedural Automotive Studio Light Rigs - Zero external CDN dependency */}
+                <Environment background={false}>
+                  {/* Overhead Studio Softbox */}
+                  <mesh position={[0, 8, 0]} scale={[16, 1, 8]}>
+                    <planeGeometry />
+                    <meshBasicMaterial color={envPreset === 'city' ? '#ffb380' : '#ffffff'} />
+                  </mesh>
+                  {/* Left Rim Light Strip */}
+                  <mesh position={[-8, 4, -4]} scale={[8, 3, 1]} rotation={[0, Math.PI / 4, 0]}>
+                    <planeGeometry />
+                    <meshBasicMaterial color={envPreset === 'city' ? '#00b4d8' : '#e0e8ff'} />
+                  </mesh>
+                  {/* Right Accent Light Strip */}
+                  <mesh position={[8, 4, 4]} scale={[8, 3, 1]} rotation={[0, -Math.PI / 4, 0]}>
+                    <planeGeometry />
+                    <meshBasicMaterial color={envPreset === 'city' ? '#ff3b1d' : '#f0f0f0'} />
+                  </mesh>
+                </Environment>
+
+                {/* Normalized car: perfectly scaled and anchored at origin */}
+                <NormalizedCar
+                  key={activeModel.id}
+                  file={activeModel.file}
+                  wireframe={wireframe}
+                />
+
+                {/* Floor Contact Shadows */}
+                <ContactShadows
+                  position={[0, 0, 0]}
+                  opacity={0.8}
+                  scale={14}
+                  blur={2.0}
+                  far={4.5}
+                  color="#000000"
+                />
+              </Suspense>
+
+              {/* Orbit Controls: Rotating around the car's fixed central axis */}
+              <OrbitControls
+                ref={controlsRef}
+                makeDefault
+                target={[0, 0.65, 0]}
+                autoRotate={autoRotate}
+                autoRotateSpeed={0.8}
+                enableZoom={false}
+                enablePan={false}
+                maxPolarAngle={Math.PI / 2.05}
+                minPolarAngle={Math.PI / 6}
               />
-            </Suspense>
-
-            {/* Orbit Controls: Rotating around the car's fixed central axis */}
-            <OrbitControls
-              ref={controlsRef}
-              makeDefault
-              target={[0, 0.65, 0]}
-              autoRotate={autoRotate}
-              autoRotateSpeed={0.8}
-              enableZoom={false}
-              enablePan={false}
-              maxPolarAngle={Math.PI / 2.05}
-              minPolarAngle={Math.PI / 6}
-            />
-          </Canvas>
+            </Canvas>
+          </ErrorBoundary>
 
           {/* Real-Time Telemetry HUD Overlay */}
           <div

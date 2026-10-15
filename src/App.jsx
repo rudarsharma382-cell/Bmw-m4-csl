@@ -13,6 +13,7 @@ import { EngineeringGallery } from './components/EngineeringGallery';
 import { SpecSheet } from './components/SpecSheet';
 import { Footer } from './components/Footer';
 import { ScrollRail } from './components/ScrollRail';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -57,19 +58,33 @@ export default function App() {
 
     let totalToLoad = sequences.reduce((sum, s) => sum + s.count, 0);
     let totalLoaded = 0;
+    let isMounted = true;
+
+    // Safety fallback timer: Ensure site becomes ready within 4s even under network congestion
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) {
+        setLoaderProgress(100);
+        setIsReady(true);
+        ScrollTrigger.refresh();
+      }
+    }, 4000);
 
     sequences.forEach(({ folder, count }) => {
       for (let i = 1; i <= count; i++) {
         const img = new Image();
         img.src = `/assets/${folder}/frame_${String(i).padStart(4, '0')}.jpg`;
         const onDone = () => {
+          if (!isMounted) return;
           totalLoaded++;
           const pct = Math.min(100, Math.round((totalLoaded / totalToLoad) * 100));
           setLoaderProgress(pct);
           if (totalLoaded >= totalToLoad) {
+            clearTimeout(safetyTimer);
             setTimeout(() => {
-              setIsReady(true);
-              ScrollTrigger.refresh();
+              if (isMounted) {
+                setIsReady(true);
+                ScrollTrigger.refresh();
+              }
             }, 300);
           }
         };
@@ -77,10 +92,16 @@ export default function App() {
         img.onerror = onDone;
       }
     });
+
+    return () => {
+      isMounted = false;
+      clearTimeout(safetyTimer);
+    };
   }, []);
 
   return (
-    <div style={{ backgroundColor: 'var(--bg)', minHeight: '100vh', position: 'relative' }}>
+    <ErrorBoundary name="BMW M4 CSL EXPERIENCE">
+      <div style={{ backgroundColor: 'var(--bg)', minHeight: '100vh', position: 'relative' }}>
       {/* Designed Minimal Preloader */}
       <Preloader
         progress={loaderProgress}
@@ -107,6 +128,7 @@ export default function App() {
           folder="frames_studio"
           frameCount={300}
           scrollDistance="650vh"
+          isReady={isReady}
           chapterTag="01 // CINEMATIC STUDIO REVEAL"
           title="BMW M4 CSL (G82)"
           subtitle="COMPETITION SPORT LIGHTWEIGHT // 1,000 UNITS WORLDWIDE"
@@ -149,6 +171,7 @@ export default function App() {
           folder="frames_doors"
           frameCount={299}
           scrollDistance="650vh"
+          isReady={isReady}
           chapterTag="03 // COCKPIT & STRIPPED CABIN"
           title="CARBON BUCKET COCKPIT"
           subtitle="M CARBON FULL BUCKET SEATS // -24 KG NET SAVINGS"
@@ -192,6 +215,7 @@ export default function App() {
           folder="frames_drone_sweep"
           frameCount={300}
           scrollDistance="650vh"
+          isReady={isReady}
           chapterTag="05 // LOW-SWEEP CHASSIS DYNAMICS"
           title="CHASSIS KINEMATICS"
           subtitle="ADAPTIVE M SUSPENSION // 8 MM LOWERED RIDE HEIGHT"
@@ -235,6 +259,7 @@ export default function App() {
           folder="frames_drone_revolve"
           frameCount={300}
           scrollDistance="650vh"
+          isReady={isReady}
           chapterTag="07 // ROTATIONAL AERODYNAMIC ANALYSIS"
           title="AERODYNAMIC SILHOUETTE"
           subtitle="ZERO-LIFT AXIS // DUCKTAIL BOOTLID INTEGRATION"
@@ -286,5 +311,6 @@ export default function App() {
           ========================================================================= */}
       <Footer />
     </div>
+    </ErrorBoundary>
   );
 }

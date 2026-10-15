@@ -1,5 +1,6 @@
 import React from 'react';
 import FlexCarousel from './FlexCarousel';
+import { ErrorBoundary } from './ErrorBoundary';
 
 export const CSL_GALLERY_ITEMS = [
   {
@@ -167,19 +168,70 @@ export const EngineeringGallery = () => {
             backgroundColor: 'rgba(11, 12, 14, 0.95)',
           }}
         >
-          <FlexCarousel
-            items={CSL_GALLERY_ITEMS}
-            preset="liquid"
-            intro="bloom"
-            cardHeight={0.54}
-            gap={14}
-            radius={0}
-            squeeze={0.18}
-            focusOnClick
-            captions
-            autoplay
-            interval={4}
-          />
+          <ErrorBoundary
+            name="MOTORSPORT DETAIL GALLERY"
+            fallback={
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  overflowX: 'auto',
+                  display: 'flex',
+                  gap: '16px',
+                  padding: '24px',
+                  alignItems: 'center',
+                }}
+              >
+                {CSL_GALLERY_ITEMS.map((item, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      flex: '0 0 320px',
+                      height: '80%',
+                      border: '1px solid var(--line)',
+                      overflow: 'hidden',
+                      position: 'relative',
+                    }}
+                  >
+                    <img
+                      src={item.src}
+                      alt={item.alt}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      loading="lazy"
+                    />
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        background: 'rgba(11, 12, 14, 0.85)',
+                        padding: '12px',
+                      }}
+                    >
+                      <span className="label-micro" style={{ color: 'var(--text)' }}>
+                        {item.title}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            }
+          >
+            <FlexCarousel
+              items={CSL_GALLERY_ITEMS}
+              preset="liquid"
+              intro="bloom"
+              cardHeight={0.54}
+              gap={14}
+              radius={0}
+              squeeze={0.18}
+              focusOnClick
+              captions
+              autoplay
+              interval={4}
+            />
+          </ErrorBoundary>
         </div>
       </div>
     </section>

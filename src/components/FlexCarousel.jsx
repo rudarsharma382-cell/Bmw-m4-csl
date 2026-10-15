@@ -336,19 +336,33 @@ const FlexCarousel = ({
     const container = containerRef.current;
     if (!container) return undefined;
 
-    const renderer = new Renderer({
-      dpr: Math.min(window.devicePixelRatio || 1, 2),
-      alpha: true,
-      premultipliedAlpha: true,
-      antialias: false,
-      depth: false
-    });
-    const gl = renderer.gl;
-    if (!renderer.isWebgl2) {
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
+    let renderer;
+    try {
+      renderer = new Renderer({
+        dpr: Math.min(window.devicePixelRatio || 1, 2),
+        alpha: true,
+        premultipliedAlpha: true,
+        antialias: false,
+        depth: false
+      });
+    } catch (e) {
+      console.warn('FlexCarousel WebGL Renderer initialization failed:', e);
       return undefined;
     }
-    gl.clearColor(0, 0, 0, 0);
+
+    const gl = renderer?.gl;
+    if (!gl || !renderer.isWebgl2) {
+      try {
+        gl?.getExtension('WEBGL_lose_context')?.loseContext();
+      } catch {}
+      return undefined;
+    }
+    try {
+      gl.clearColor(0, 0, 0, 0);
+    } catch (e) {
+      console.warn('WebGL clearColor failed:', e);
+      return undefined;
+    }
     const canvas = gl.canvas;
     canvas.style.display = 'block';
     canvas.style.width = '100%';

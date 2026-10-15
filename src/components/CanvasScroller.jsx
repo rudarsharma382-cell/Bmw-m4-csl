@@ -26,6 +26,7 @@ export const CanvasScroller = ({
   chapterTag = '',
   telemetry = [],
   overlays = [],
+  isReady = false,
 }) => {
   const containerRef = useRef(null);
   const pinWrapperRef = useRef(null);
@@ -72,7 +73,7 @@ export const CanvasScroller = ({
     (targetIndex) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+      const ctx = canvas.getContext('2d', { alpha: false });
       if (!ctx) return;
 
       const img = getBestFrame(targetIndex);
@@ -80,8 +81,10 @@ export const CanvasScroller = ({
 
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const rect = canvas.getBoundingClientRect();
-      const targetWidth = Math.round(rect.width * dpr);
-      const targetHeight = Math.round(rect.height * dpr);
+      const targetWidth = Math.round(rect.width * dpr) || Math.round((window.innerWidth || 1920) * dpr);
+      const targetHeight = Math.round(rect.height * dpr) || Math.round((window.innerHeight || 1080) * dpr);
+
+      if (targetWidth <= 0 || targetHeight <= 0) return;
 
       // Only resize canvas buffer if dimensions actually changed
       if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
@@ -94,6 +97,8 @@ export const CanvasScroller = ({
       const canvasH = canvas.height;
       const imgW = img.naturalWidth;
       const imgH = img.naturalHeight;
+
+      if (canvasW <= 0 || canvasH <= 0 || imgW <= 0 || imgH <= 0) return;
 
       const imgRatio = imgW / imgH;
       const canvasRatio = canvasW / canvasH;
@@ -121,29 +126,75 @@ export const CanvasScroller = ({
     [getBestFrame]
   );
 
-  // Load all images for this sequence
+  // Load images in controlled batches to prevent saturating HTTP sockets and Vercel edge limits
   useEffect(() => {
     imagesRef.current = new Array(frameCount);
     let loadedCount = 0;
+    let isCancelled = false;
 
-    for (let i = 0; i < frameCount; i++) {
+    // Load initial 30 frames immediately for instant scrub response
+    const initialBatch = Math.min(30, frameCount);
+    for (let i = 0; i < initialBatch; i++) {
       const img = new Image();
       img.src = getFrameUrl(i + 1);
       img.onload = () => {
+        if (isCancelled) return;
         imagesRef.current[i] = img;
         loadedCount++;
         setLoadedPercent(Math.round((loadedCount / frameCount) * 100));
 
-        // Draw initial frame as soon as frame 0 loads
-        if (i === 0 && lastDrawnFrameRef.current === -1) {
+        // Draw initial frame as soon as ANY frame is available
+        if (lastDrawnFrameRef.current === -1) {
           renderFrame(0);
         }
       };
       img.onerror = () => {
+        if (isCancelled) return;
         loadedCount++;
       };
     }
+
+    // Load remaining frames progressively
+    let nextIndex = initialBatch;
+    const loadNextChunk = () => {
+      if (isCancelled || nextIndex >= frameCount) return;
+      const chunkSize = 20;
+      const end = Math.min(nextIndex + chunkSize, frameCount);
+
+      for (let i = nextIndex; i < end; i++) {
+        const img = new Image();
+        img.src = getFrameUrl(i + 1);
+        img.onload = () => {
+          if (isCancelled) return;
+          imagesRef.current[i] = img;
+          loadedCount++;
+          setLoadedPercent(Math.round((loadedCount / frameCount) * 100));
+        };
+        img.onerror = () => {
+          if (isCancelled) return;
+          loadedCount++;
+        };
+      }
+      nextIndex = end;
+      if (nextIndex < frameCount) {
+        setTimeout(loadNextChunk, 80);
+      }
+    };
+
+    const timer = setTimeout(loadNextChunk, 150);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
   }, [frameCount, getFrameUrl, renderFrame]);
+
+  // Re-paint initial frame immediately when isReady triggers
+  useEffect(() => {
+    if (isReady) {
+      renderFrame(0);
+    }
+  }, [isReady, renderFrame]);
 
   // CSS Sticky + ScrollTrigger scrubbing
   useEffect(() => {
@@ -188,6 +239,8 @@ export const CanvasScroller = ({
       ScrollTrigger.refresh();
       if (lastDrawnFrameRef.current >= 0) {
         renderFrame(lastDrawnFrameRef.current);
+      } else {
+        renderFrame(0);
       }
     };
 
@@ -224,6 +277,10 @@ export const CanvasScroller = ({
           alignItems: 'center',
           justifyContent: 'center',
           backgroundColor: 'var(--bg)',
+          backgroundImage: `url(${getFrameUrl(1)})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
         }}
       >
         {/* Render Canvas */}
